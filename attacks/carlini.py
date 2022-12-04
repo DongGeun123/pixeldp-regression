@@ -97,8 +97,8 @@ class Attack:
         self.batch_size = batch_size
         self.repeat = binary_search_steps >= 10
 
-        if attack_params.attack_norm != 'l2':
-            raise ValueError('This is an L2 attack.')
+        if attack_params.attack_norm != 'l3':
+            raise ValueError('This is an L3 attack.')
 
         self.attack_params = attack_params
         self.budget = attack_params.max_attack_size

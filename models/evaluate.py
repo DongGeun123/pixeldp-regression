@@ -228,6 +228,7 @@ def evaluate(hps, model, dataset=None, dir_name=None, rerun=False,
             dp_mechs = {
                 'l2': 'gaussian',
                 'l1': 'laplace',
+                'l3': 'exponential'
             }
             robustness_from_argmax = [robustness.robustness_size_argmax(
                 counts=x,

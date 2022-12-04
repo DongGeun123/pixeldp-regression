@@ -216,6 +216,7 @@ class Attack:
         dp_mechs = {
             'l2': 'gaussian',
             'l1': 'laplace',
+            'l3': 'exponential'
         }
         if self.sensitivity_multiplier == None:
             self.sensitivity_multiplier = self.sess.run(self.model.pre_noise_sensitivity())

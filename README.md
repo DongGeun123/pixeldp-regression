@@ -6,6 +6,7 @@ Chose the model ll.174-176, and the parameters ll. 111-142 in main.py. See
 models/params.py for parameter usage. Then, for instance:
 
     python3 main.py --num_gpus 1 --dataset cifar10 --mode train
+    python3 main.py --num_gpus 1 --dataset wiki --mode train 
 
 ## Eval the model.
 

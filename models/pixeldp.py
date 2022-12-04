@@ -95,6 +95,9 @@ class Model(object):
         elif sensitivity_norm == 'l1':
             # Use the Laplace mechanism
             return self.hps.attack_norm_bound / dp_eps #  0.1
+        elif sensitivity_norm == 'l3':
+            # use the Exponential mechanism
+            return 1/dp_eps
         else:
             return 0
 
@@ -258,7 +261,11 @@ class Model(object):
         elif sensitivity_norm == 'l2':
             noise = tf.random_normal(tf.shape(x), mean=0, stddev=1, dtype=tf.float32)
             noise = noise_scale * noise
-
+        elif sensitivity_norm == 'l3':
+            scale         = tf.ones(tf.shape(x),  dtype=tf.float32)
+            noise = tf.distributions.Exponential(scale).sample()
+            noise = noise_scale * noise
+            
         return x + noise
 
     def _maybe_add_noise_layer(self, x, sensitivity_norm, sensitivity_control_scheme, position):

@@ -319,6 +319,7 @@ def evaluate_one(dataset, model_class, model_params, attack_class,
             dp_mechs = {
                 'l2': 'gaussian',
                 'l1': 'laplace',
+                'l3': 'exponential'
             }
             robustness_from_argmax = [robustness.robustness_size_argmax(
                 counts=x,
