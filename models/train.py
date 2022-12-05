@@ -21,7 +21,7 @@ import six
 import sys
 import os
 import json
-
+import math
 import datasets
 import numpy as np
 import models.params
@@ -93,11 +93,12 @@ def train(hps, model, dataset=None, dir_name=None, dev='/cpu:0'):
         #predictions   = tf.argmax(tf.reduce_sum(votes, axis=0), axis=1)
         #reduce_mean     = tf.reduce_mean(tf.to_float(tf.equal(predictions, truth)))
 
-        # summary_hook = tf.train.SummarySaverHook(
-        #     save_steps=100,
-        #     output_dir=dir_name,
-        #     summary_op=tf.summary.merge([model.summaries,
-        #                                  tf.summary.scalar('reduce_mean', reduce_mean)]))
+        summary_hook = tf.train.SummarySaverHook(
+            save_steps=50,
+            output_dir=dir_name,
+            summary_op=tf.summary.merge([model.summaries,
+                                         tf.summary.scalar('MSE', model.cost),
+                                         tf.summary.scalar('RMSE', tf.math.sqrt(model.cost))]))
 
         logging_hook = tf.train.LoggingTensorHook(
             tensors={'step': model.global_step,
@@ -106,7 +107,7 @@ def train(hps, model, dataset=None, dir_name=None, dev='/cpu:0'):
                      'predictions': model.predictions,
                      'labels': model.labels
                      },
-            every_n_iter=5)
+            every_n_iter=100)
 
         class _LearningRateSetterHook(tf.train.SessionRunHook):
             """Sets learning_rate based on global step."""
@@ -138,7 +139,7 @@ def train(hps, model, dataset=None, dir_name=None, dev='/cpu:0'):
             hooks=[logging_hook,
                    _LearningRateSetterHook(),
                    tf.train.StopAtStepHook(last_step=hps.steps_num),],
-            # chief_only_hooks=[summary_hook],
+            chief_only_hooks=[summary_hook],
             # Since we provide a SummarySaverHook, we need to disable default
             # SummarySaverHook. To do that we set save_summaries_steps to 0.
             save_summaries_steps=0,
