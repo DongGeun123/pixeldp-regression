@@ -34,8 +34,8 @@ class Attack:
         if self.ord not in [np.inf, 1, 2]:
             raise ValueError('ord must be np.inf, 1, 2.')
 
-        self.min_pix = min_pix
-        self.max_pix = max_pix
+        self.min_pix = boxmin
+        self.max_pix = boxmax
 
         self.sess = sess
         self.attack_params = attack_params
@@ -64,10 +64,7 @@ class Attack:
         for _ in range(1, self.attack_params.n_draws_attack):
             self.concated_tlab = tf.concat([self.concated_tlab,  self.tlab], 0)
 
-        self.loss  = tf.nn.softmax_cross_entropy_with_logits(
-            logits=self.output,
-            labels=self.concated_tlab
-        )
+        self.loss  = tf.losses.mean_squared_error(predictions=self.output, labels=self.concated_tlab)
 
         # run attack according to: https://arxiv.org/pdf/1611.01236.pdf (page 3)
         #  if self.targeted:
