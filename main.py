@@ -45,10 +45,10 @@ def run_one():
     else:
         dev = '/gpu:0'
 
-    steps_num       = 90000
-    eval_data_size  = 10000
+    steps_num       = 10000
+    eval_data_size  = 5000
     lrn_rate        = 1e-4
-    lrn_rte_changes = [40000, 60000, 80000]
+    lrn_rte_changes = [1000, 2000, 4000]
     lrn_rte_vals    = [1e-5, 1e-6, 1e-7]
     if FLAGS.mode == 'train':
         batch_size = 128
