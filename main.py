@@ -47,7 +47,7 @@ def run_one():
 
     steps_num       = 10000
     eval_data_size  = 5000
-    lrn_rate        = 1e-4
+    lrn_rate        = 2e-5
     lrn_rte_changes = [1000, 2000, 4000]
     lrn_rte_vals    = [1e-5, 1e-6, 1e-7]
     if FLAGS.mode == 'train':

@@ -94,7 +94,7 @@ def train(hps, model, dataset=None, dir_name=None, dev='/cpu:0'):
         #reduce_mean     = tf.reduce_mean(tf.to_float(tf.equal(predictions, truth)))
 
         summary_hook = tf.train.SummarySaverHook(
-            save_steps=50,
+            save_steps=5,
             output_dir=dir_name,
             summary_op=tf.summary.merge([model.summaries,
                                          tf.summary.scalar('MSE', model.cost),
