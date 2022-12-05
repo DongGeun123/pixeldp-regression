@@ -98,8 +98,8 @@ def run_one():
             dp_delta=0.05,
             robustness_confidence_proba=0.05,
             attack_norm_bound=L,
-            attack_norm='l3',
-            sensitivity_norm='l3',
+            attack_norm='l2',
+            sensitivity_norm='l2',
             sensitivity_control_scheme='bound',  # bound or optimize
             noise_after_n_layers=1,
             layer_sensitivity_bounds=['l1_l2'],
@@ -110,15 +110,15 @@ def run_one():
             eval_data_size=eval_data_size,
     )
 
-    #  atk = pgd
-    atk = carlini
+    atk = pgd
+    #atk = carlini
     #  atk = carlini_robust_precision
     if atk == carlini_robust_precision:
         attack_params = attacks.params.AttackParamsPrec(
             restarts=1,
             n_draws_attack=20,
             n_draws_eval=500,
-            attack_norm='l3',
+            attack_norm='l2',
             max_attack_size=5,
             num_examples=1000,
             attack_methodolody=attacks.name_from_module(atk),
@@ -132,7 +132,7 @@ def run_one():
             restarts=1,
             n_draws_attack=1,
             n_draws_eval=500,
-            attack_norm='l3',
+            attack_norm='l2',
             max_attack_size=5,
             num_examples=1000,
             attack_methodolody=attacks.name_from_module(atk),
