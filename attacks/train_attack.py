@@ -82,10 +82,7 @@ def train_one(dataset, model_class, model_params, attack_class, attack_params,
         model_params = models.params.update(model_params, 'batch_size', images_per_batch)
         model_params = models.params.update(model_params, 'n_draws',
                 attack_params.n_draws_attack)
-        if model_class.__name__ == 'madry':
-            model = model_class.Model()
-        else:
-            model = model_class.Model(model_params, None, None, 'eval')
+        model = model_class.Model(model_params, None, None, 'eval')
 
         boxmin = -0.5
         boxmax = 0.5
