@@ -103,9 +103,9 @@ def robustness_size_argmax(counts, eta,
     """
     hyp_n = len(counts)
     count_tot = sum(counts)
-    count2, count1 = sorted(counts)[-2:]
-    p_max_lb = clopper_pearson_lower_bound(count1, count_tot, 0.05, bonferroni_hyp_n=hyp_n)
-    p_sec_ub = clopper_pearson_upper_bound(count2, count_tot, 0.05, bonferroni_hyp_n=hyp_n)
+    count1 = counts[0]
+    p_sec_ub = clopper_pearson_upper_bound(count1, count_tot, 0.05, bonferroni_hyp_n=hyp_n)
+    p_max_lb = 1 - p_sec_ub
 
     if   dp_mechanism == 'laplace':
         return _laplace_robustness_size(p_max_lb, p_sec_ub, dp_attack_size, dp_epsilon)
@@ -113,49 +113,3 @@ def robustness_size_argmax(counts, eta,
         return _gaussian_robustness_size(p_max_lb, p_sec_ub, dp_attack_size, dp_epsilon, dp_delta)
     else:
         raise ValueError('Only supports the following DP mechanisms: laplace gaussian.')
-
-def robustness_size_softmax(tot_sum, sqr_sum, counts, eta,
-                            dp_attack_size, dp_epsilon, dp_delta, dp_mechanism):
-    """Robustness size for E(softmax) predictions.
-
-    Args:
-      tot_sum: the sum of all predictions for this label (after softmax).
-      sqr_sum: the sum of squares of all predictions for this label (after
-               softmax).
-      counts: the counts of prediction for each label.
-      eta: the bounds hold with probability (1 - eta).
-      dp_attack_size: DP noise scaled for this attack size.
-      dp_epsilon: DP epsilon param.
-      dp_delta: DP delta param.
-      dp_mechanism: DP mechanism used, in {laplace,gaussian}.
-
-    Returns: The maximum size of attack this prediction is robust against, with
-             proba at least (1-eta).
-    """
-    n = sum(counts)
-    if n == 1:
-        return 0
-
-    hyp_n = len(counts)
-    i2, i1 = np.argsort(tot_sum)[-2:]
-
-    if 7*math.log(2*hyp_n/eta)/(3*(n-1)) > 0.025:
-        # Use Hoeffding bounds as the 1/n term is Bernstein is too big.
-        p_max_lb = hoeffding_lower_bound(
-                tot_sum[i1], n, eta, bonferroni_hyp_n=hyp_n)
-        p_sec_ub = hoeffding_upper_bound(
-                tot_sum[i2], n, eta, bonferroni_hyp_n=hyp_n)
-    else:
-        # Use empirical Bernstein bounds
-        p_max_lb = empirical_bernstein_lower_bound(
-                tot_sum[i1], sqr_sum[i1], n, eta, bonferroni_hyp_n=hyp_n)
-        p_sec_ub = empirical_bernstein_upper_bound(
-                tot_sum[i2], sqr_sum[i2], n, eta, bonferroni_hyp_n=hyp_n)
-
-    if   dp_mechanism == 'laplace':
-        return _laplace_robustness_size(p_max_lb, p_sec_ub, dp_attack_size, dp_epsilon)
-    elif dp_mechanism == 'gaussian':
-        return _gaussian_robustness_size(p_max_lb, p_sec_ub, dp_attack_size, dp_epsilon, dp_delta)
-    else:
-        raise ValueError('Only supports the following DP mechanisms: laplace gaussian.')
-

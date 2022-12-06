@@ -46,7 +46,7 @@ def run_one():
         dev = '/gpu:0'
 
     steps_num       = 5000
-    eval_data_size  = 5000
+    eval_data_size  = 7628 # 7628
     lrn_rate        = 2e-5
     lrn_rte_changes = [250, 500, 1000]
     lrn_rte_vals    = [1e-5, 1e-6, 1e-7]

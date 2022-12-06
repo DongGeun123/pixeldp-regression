@@ -55,6 +55,7 @@ class Model(pixeldp.Model):
             # before going through the rest of the network).
             ones = tf.ones([len(self.images.get_shape())-1], dtype=tf.int32)
             x = tf.tile(self.images, tf.concat([[self.hps.n_draws], ones], axis=0))
+
         x = self._maybe_add_noise_layer(x, sensitivity_norm=self.hps.sensitivity_norm,
                 sensitivity_control_scheme=self.hps.sensitivity_control_scheme,
                 position=0)
