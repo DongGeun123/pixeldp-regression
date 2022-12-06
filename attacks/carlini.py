@@ -86,19 +86,11 @@ class Attack:
         self.model_dir = model_dir
         batch_size = inputs_shape[0].value
 
-        if 'imagenet' in self.model_dir and self.model_params.attack_norm_bound:
-            # Nasty hacks
-            batch_size = model_params.batch_size
-            labels_shape = (batch_size, model_params.num_classes)
-            inputs_shape = (batch_size, model_params.image_size,
-                            model_params.image_size, model_params.n_channels)
-            batch_size = model_params.batch_size
-
         self.batch_size = batch_size
         self.repeat = binary_search_steps >= 10
 
-        if attack_params.attack_norm != 'l3':
-            raise ValueError('This is an L3 attack.')
+        if attack_params.attack_norm != 'l2':
+            raise ValueError('This is an L2 attack.')
 
         self.attack_params = attack_params
         self.budget = attack_params.max_attack_size
@@ -133,40 +125,6 @@ class Attack:
         self.boxplus = (boxmin + boxmax) / 2.
         self.newimg  = tf.tanh(modifier + self.timg) * self.boxmul + self.boxplus
 
-        if 'imagenet' in self.model_dir and self.model_params.attack_norm_bound > 0.0:
-            autoencoder_dir_name = os.path.join(model_dir, "autoencoder_l2_l2_s1_{}_32_32_64_10_8_5_srd1221_srd1221_srd1221".format(self.model_params.attack_norm_bound))
-            autoencoder_params = json.load(
-                open(os.path.join(autoencoder_dir_name, "params.json"), "r")
-            )
-            autoencoder_params['n_draws'] = attack_params.n_draws_attack
-            autoencoder_hps = tf.contrib.training.HParams()
-            for k in autoencoder_params:
-                autoencoder_hps.add_hparam(k, autoencoder_params[k])
-            autoencoder_hps.batch_size = model_params.batch_size
-            autoencoder_hps.autoencoder_dir_name = autoencoder_dir_name
-            from models import autoencoder_model
-            autoencoder = autoencoder_model.Autoencoder(autoencoder_hps,
-                                                              self.newimg,
-                                                              self.newimg,
-                                                              "eval")
-            self.autoencoder = autoencoder
-            autoencoder.build_graph()
-            autoencoder_variables = []
-            for k in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
-                if 'attack' in k.name:
-                    continue
-                autoencoder_variables.append(k)
-            autoencoder_saver = tf.train.Saver(autoencoder_variables)
-            autoencoder_summary_writer = tf.summary.FileWriter(autoencoder_dir_name)
-            try:
-                autoencoder_ckpt_state = tf.train.get_checkpoint_state(autoencoder_dir_name)
-            except tf.errors.OutOfRangeError as e:
-                tf.logging.error('Cannot restore checkpoint: %s', e)
-            print('Autoencoder: Loading checkpoint',
-                            autoencoder_ckpt_state.model_checkpoint_path)
-            autoencoder_saver.restore(sess,
-                                      autoencoder_ckpt_state.model_checkpoint_path)
-
         self.concated_tlab = self.tlab
         self.concated_const = self.const
         for _ in range(1, self.attack_params.n_draws_attack):
@@ -178,7 +136,6 @@ class Attack:
             model.build_graph(2*(self.autoencoder.output - 0.5), self.tlab)
         else:
             model.build_graph(self.newimg, self.tlab)
-        self.output = model.logits
         self.predictions = model.predictions
 
         # distance to the input data
@@ -189,6 +146,7 @@ class Attack:
         other = tf.reduce_max((1-self.concated_tlab)*self.output - (self.concated_tlab*10000),1)
 
         if self.TARGETED:
+            # True if we should perform a targetted attack, False otherwise.
             # if targetted, optimize for making the other class most likely
             loss1 = tf.maximum(0.0, other-real+self.CONFIDENCE)
         else:
