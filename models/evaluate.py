@@ -89,9 +89,9 @@ def evaluate(hps, model, dataset=None, dir_name=None, rerun=False,
 
         # Make predictions on the dataset, keep the label distribution
         data = {
-            'argmax_sum': []
+            'mean_square_error': []
         }
-        mean_loss = 0
+        total_loss = 0
         eval_data_size   = hps.eval_data_size
         eval_batch_size  = hps.batch_size
         eval_batch_count = int(eval_data_size / eval_batch_size)
@@ -104,10 +104,10 @@ def evaluate(hps, model, dataset=None, dir_name=None, rerun=False,
                     model.cost,
                     model.predictions,
                     model.labels, ], args)
-            mean_loss += loss
+            total_loss += loss
             print("Done: {}/{}".format(eval_batch_size*i, eval_data_size))
             # truth = np.argmax(truth, axis=1)[:hps.batch_size]
-            data['argmax_sum'] += predictions.tolist()
+            # data['argmax_sum'] += predictions.tolist()
         # For Parseval, get true sensitivity, use to rescale the actual attack
         # bound as the nosie assumes this to be 1 but often it is not.
         # Parseval updates usually have a sensitivity higher than 1
@@ -125,33 +125,35 @@ def evaluate(hps, model, dataset=None, dir_name=None, rerun=False,
             f.write(json.dumps(d))
 
         # Compute robustness and add it to the eval data.
-        if compute_robustness:  # This is used mostly to avoid errors on non pixeldp DNNs
-            dp_mechs = {
-                'l2': 'gaussian',
-                'l1': 'laplace'
-            }
-            robustness_size= [robustness.robustness_size_argmax(
-                counts=x,
-                eta=hps.robustness_confidence_proba,
-                dp_attack_size=hps.attack_norm_bound,
-                dp_epsilon=hps.dp_epsilon,
-                dp_delta=hps.dp_delta,
-                dp_mechanism=dp_mechs[hps.sensitivity_norm]
-                ) / sensitivity_multiplier for x in data['argmax_sum']] #argmax_sum : hps.batch_size, hps.num_classes]
-            data['robustness_size'] = robustness_size
-        # Log eval data
-        with open(dir_name + "/eval_data.json", 'w') as f:
-            f.write(json.dumps(data))
+        # if compute_robustness:  # This is used mostly to avoid errors on non pixeldp DNNs
+        #     dp_mechs = {
+        #         'l2': 'gaussian',
+        #         'l1': 'laplace'
+        #     }
+        #     robustness_size= [robustness.robustness_size_argmax(
+        #         counts=x,
+        #         eta=hps.robustness_confidence_proba,
+        #         dp_attack_size=hps.attack_norm_bound,
+        #         dp_epsilon=hps.dp_epsilon,
+        #         dp_delta=hps.dp_delta,
+        #         dp_mechanism=dp_mechs[hps.sensitivity_norm]
+        #         ) / sensitivity_multiplier for x in data['argmax_sum']] #argmax_sum : hps.batch_size, hps.num_classes]
+        #     data['robustness_size'] = robustness_size
+        #     data['mean_loss'] =mean_loss
+        # # Log eval data
+        # with open(dir_name + "/eval_data.json", 'w') as f:
+        #     f.write(json.dumps(data))
 
         # Print stuff
-
+        mean_square_error = total_loss / eval_batch_count
         precision_summ = tf.Summary()
-        mean_loss /= eval_batch_count
         precision_summ.value.add(
-            tag='mean_loss', simple_value=mean_loss)
-
+            tag='mean_square_loss', simple_value=mean_square_error)
+        data['mean_square_error'] = mean_square_error
+        with open(dir_name + "/eval_data.json", 'w') as f:
+            f.write(json.dumps(data))
         #summary_writer.add_summary(precision_summ, train_step)
         #  summary_writer.add_summary(summaries, train_step)
-        tf.logging.info('mean_loss: %.3f' %(mean_loss))
+        tf.logging.info('mean_square_error: %.3f' %(mean_square_error))
         summary_writer.flush()
 
