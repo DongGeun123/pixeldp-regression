@@ -81,57 +81,10 @@ def evaluate_one(dataset, model_class, model_params, attack_class,
         config.gpu_options.visible_device_list = str(dev.split(":")[-1])
         sess = tf.Session(config=config)
 
-        # Special treatment of imagenet: load inception + autoencoder
-        if 'imagenet' in model_dir and model_params.attack_norm_bound > 0.0:
-            autoencoder_dir_name = os.path.join(model_dir, "autoencoder_l2_l2_s1_{}_32_32_64_10_8_5_srd1221_srd1221_srd1221".format(model_params.attack_norm_bound))
-            autoencoder_params = json.load(
-                open(os.path.join(autoencoder_dir_name, "params.json"), "r")
-            )
-            autoencoder_params['n_draws'] = attack_params.n_draws_eval
-            # hyperparams for autoencoder
-            autoencoder_hps = tf.contrib.training.HParams()
-            for k in autoencoder_params:
-                autoencoder_hps.add_hparam(k, autoencoder_params[k])
-            autoencoder_hps.batch_size = batch_size*attack_params.n_draws_attack
-            autoencoder_hps.autoencoder_dir_name = autoencoder_dir_name
-            from models import autoencoder_model
-            autoencoder_model = autoencoder_model.Autoencoder(autoencoder_hps,
-                                                              image_placeholder,
-                                                              image_placeholder,
-                                                              "eval")
-            autoencoder_model.build_graph()
-            autoencoder_variables = []
-            for k in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
-                autoencoder_variables.append(k)
-            autoencoder_saver = tf.train.Saver(autoencoder_variables)
-            autoencoder_summary_writer = tf.summary.FileWriter(autoencoder_dir_name)
-            try:
-                autoencoder_ckpt_state = tf.train.get_checkpoint_state(autoencoder_dir_name)
-            except tf.errors.OutOfRangeError as e:
-                tf.logging.error('Cannot restore checkpoint: %s', e)
-            print('Autoencoder: Loading checkpoint',
-                            autoencoder_ckpt_state.model_checkpoint_path)
-            autoencoder_saver.restore(sess,
-                                      autoencoder_ckpt_state.model_checkpoint_path)
-            # imagenet dataset loader returns images in [0, 1]
-            images = 2*(autoencoder_model.output - 0.5)
-            model = model_class.Model(model_params, images, label_placeholder,
-                                      'eval')
-            model.build_graph()
-            inception_variables = []
-            for k in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
-                if k in autoencoder_variables and k.name != "global_step":
-                    continue
-                if k.name.startswith("DW-encoder") or k.name.startswith("b-encoder")\
-                     or k.name.startswith("b-decoder"):
-                    continue
-                inception_variables.append(k)
-            saver = tf.train.Saver(inception_variables)
-        else:
-            model = model_class.Model(model_params, image_placeholder,
-                    label_placeholder, 'eval')
-            model.build_graph()
-            saver = tf.train.Saver()
+        model = model_class.Model(model_params, image_placeholder,
+                label_placeholder, 'eval')
+        model.build_graph()
+        saver = tf.train.Saver()
 
         with sess:
             tf.train.start_queue_runners(sess)
@@ -160,49 +113,14 @@ def evaluate_one(dataset, model_class, model_params, attack_class,
                 args = {model.noise_scale: 1.0}
             else:
                 args = {}
-            if 'imagenet' in model_dir and model_params.attack_norm_bound > 0.0:
-                args = {autoencoder_model.noise_scale: 1.0}
 
-            data = {
-                'argmax_sum': [],
-                'softmax_sum': [],
-                'softmax_sqr_sum': [],
-                'robustness_from_argmax': [],
-                'robustness_from_softmax': [],
-                'adv_argmax_sum': [],
-                'adv_softmax_sum': [],
-                'adv_softmax_sqr_sum': [],
-                'adv_robustness_from_argmax': [],
-                'adv_robustness_from_softmax': [],
-                'pred_truth':  [],
-                'adversarial_norm': [],
-            }
+            data = {}
 
             num_iter = int(math.ceil(attack_params.num_examples / images_per_batch_attack))
             intra_batch_num_iter = int(math.ceil(images_per_batch_attack / batch_size))
+            loss = 0.0
             for step in range(0, num_iter):
                 print("Evaluate:: Starting step {}/{}".format(step+1, num_iter))
-                pred_truth  = np.zeros([images_per_batch_attack], dtype=int)
-
-                predictions = np.zeros([images_per_batch_attack], dtype=int)
-
-                prediction_votes = np.zeros(
-                        [images_per_batch_attack, model_params.num_classes])
-                prediction_softmax_sum = np.zeros(
-                        [images_per_batch_attack, model_params.num_classes])
-                prediction_softmax_sum_sqr = np.zeros(
-                        [images_per_batch_attack, model_params.num_classes])
-
-                adv_prediction_votes = np.zeros(
-                        [images_per_batch_attack, attack_params.restarts,
-                         model_params.num_classes])
-                adv_prediction_softmax_sum = np.zeros(
-                        [images_per_batch_attack, attack_params.restarts,
-                         model_params.num_classes])
-                adv_prediction_softmax_sum_sqr = np.zeros(
-                        [images_per_batch_attack, attack_params.restarts,
-                         model_params.num_classes])
-
                 adv_norm = np.zeros(
                         [images_per_batch_attack, attack_params.restarts])
 
@@ -256,55 +174,19 @@ def evaluate_one(dataset, model_class, model_params, attack_class,
                         if restart == 0:
                             args[image_placeholder] = image_batch
                             args[label_placeholder] = label_batch
-
                             softmax = sess.run(ops, args)
-                            max_softmax = np.argmax(softmax, axis=1)
-                            for i in range(attack_params.n_draws_eval):
-                                for j in range(true_batch_size):
-                                    abs_j = batch_i_start + j
-
-                                    pred_truth[abs_j] = np.argmax(label_batch[j])
-
-                                    rel_i = i*batch_size+j
-                                    pred = max_softmax[rel_i]
-                                    prediction_votes[abs_j, pred] += 1
-                                    prediction_softmax_sum[abs_j] +=  \
-                                        softmax[rel_i]
-                                    prediction_softmax_sum_sqr[abs_j] +=  \
-                                        np.square(softmax[rel_i])
 
                         # Predictions on the adversarial image for current
                         # restart
                         args[image_placeholder] = adv_image_batch
                         args[label_placeholder] = label_batch
 
-                        softmax = sess.run(ops, args)
-                        max_softmax = np.argmax(softmax, axis=1)
-                        for i in range(attack_params.n_draws_eval):
-                            for j in range(true_batch_size):
-                                abs_j = batch_i_start + j
-                                rel_i = i*batch_size+j
-                                pred = max_softmax[rel_i]
-                                adv_prediction_votes[abs_j, restart, pred] += 1
-                                adv_prediction_softmax_sum[abs_j, restart] +=  \
-                                        softmax[rel_i]
-                                adv_prediction_softmax_sum_sqr[abs_j, restart] \
-                                        += np.square(softmax[rel_i])
+                        #softmax = sess.run(ops, args)
 
-                predictions = np.argmax(prediction_votes, axis=1)
-                adv_predictions = np.argmax(adv_prediction_votes, axis=2)
+                        mse = tf.losses.mean_squared_error(labels=label_batch, predictions=softmax)
+                        loss += mse.eval()
+        # save tensor in json file
 
-                data['pred_truth'] += pred_truth.tolist()
-
-                data['adversarial_norm'] += adv_norm.tolist()
-
-                data['argmax_sum'] += prediction_votes.tolist()
-                data['softmax_sum'] += prediction_softmax_sum.tolist()
-                data['softmax_sqr_sum'] += prediction_softmax_sum_sqr.tolist()
-
-                data['adv_argmax_sum'] += adv_prediction_votes.tolist()
-                data['adv_softmax_sum'] += adv_prediction_softmax_sum.tolist()
-                data['adv_softmax_sqr_sum'] += adv_prediction_softmax_sum_sqr.tolist()
 
         sensitivity_multiplier = 1.0
         try:
@@ -313,60 +195,8 @@ def evaluate_one(dataset, model_class, model_params, attack_class,
         except Exception:
             print("Missing Mulltiplier")
             pass
-
-        # Compute robustness and add it to the eval data.
-        if compute_robustness:  # This is used mostly to avoid errors on non pixeldp DNNs
-            dp_mechs = {
-                'l2': 'gaussian',
-                'l1': 'laplace',
-                'l3': 'exponential'
-            }
-            robustness_from_argmax = [robustness.robustness_size_argmax(
-                counts=x,
-                eta=model_params.robustness_confidence_proba,
-                dp_attack_size=model_params.attack_norm_bound,
-                dp_epsilon=model_params.dp_epsilon,
-                dp_delta=model_params.dp_delta,
-                dp_mechanism=dp_mechs[model_params.sensitivity_norm]
-                ) / sensitivity_multiplier for x in data['argmax_sum']]
-            data['robustness_from_argmax'] = robustness_from_argmax
-            robustness_form_softmax = [robustness.robustness_size_softmax(
-                tot_sum=data['softmax_sum'][i],
-                sqr_sum=data['softmax_sqr_sum'][i],
-                counts=data['argmax_sum'][i],
-                eta=model_params.robustness_confidence_proba,
-                dp_attack_size=model_params.attack_norm_bound,
-                dp_epsilon=model_params.dp_epsilon,
-                dp_delta=model_params.dp_delta,
-                dp_mechanism=dp_mechs[model_params.sensitivity_norm]
-                ) / sensitivity_multiplier for i in range(len(data['argmax_sum']))]
-            data['robustness_form_softmax'] = robustness_form_softmax
-            adv_robustness_from_argmax = [
-                [robustness.robustness_size_argmax(
-                    counts=x[r],
-                    eta=model_params.robustness_confidence_proba,
-                    dp_attack_size=model_params.attack_norm_bound,
-                    dp_epsilon=model_params.dp_epsilon,
-                    dp_delta=model_params.dp_delta,
-                    dp_mechanism=dp_mechs[model_params.sensitivity_norm]
-                    ) / sensitivity_multiplier for r in range(0, attack_params.restarts)]
-                for x in data['adv_argmax_sum']]
-            data['adv_robustness_from_argmax'] = adv_robustness_from_argmax
-            adv_robustness_form_softmax = [
-                [robustness.robustness_size_softmax(
-                    tot_sum=data['adv_softmax_sum'][i][r],
-                    sqr_sum=data['adv_softmax_sqr_sum'][i][r],
-                    counts=data['adv_argmax_sum'][i][r],
-                    eta=model_params.robustness_confidence_proba,
-                    dp_attack_size=model_params.attack_norm_bound,
-                    dp_epsilon=model_params.dp_epsilon,
-                    dp_delta=model_params.dp_delta,
-                    dp_mechanism=dp_mechs[model_params.sensitivity_norm]
-                    ) / sensitivity_multiplier for r in range(0, attack_params.restarts)]
-                for i in range(len(data['adv_argmax_sum']))]
-            data['adv_robustness_form_softmax'] = adv_robustness_form_softmax
-
         data['sensitivity_mult_used'] = sensitivity_multiplier
+        data['mse'] = loss / (num_iter * attack_params.restarts)
 
         # Log eval data
         with open(result_path, 'w') as f:

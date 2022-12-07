@@ -60,6 +60,7 @@ def load_batch(attack_dir, batch_no, restart):
     """Helper to load a batch for evaluation
     """
     if not os.path.exists(attack_dir):
+        print("current direc:",os.getcwd())
         print("Malformed data directory hierarchy")
         print(attack_dir)
         sys.exit(-1)
